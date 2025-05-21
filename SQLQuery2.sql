@@ -4,7 +4,8 @@ create database denemelik2
 -- 1. IL
 CREATE TABLE IL (
     ilID INT PRIMARY KEY,
-    ad VARCHAR(100) NOT NULL
+    ad VARCHAR(100) NOT NULL,
+	adresID INT,
 );
 
 -- 2. ILCE
@@ -38,8 +39,8 @@ CREATE TABLE ADRES (
     ilceID INT,
     mahalleID INT,
     caddeSokakID INT,
-    disKapiNo VARCHAR(20),
-    icKapiNo VARCHAR(20),
+    disKapiNo VARCHAR(20) not null,
+    icKapiNo VARCHAR(20) not null,
     adresAciklamasi VARCHAR(200),
     FOREIGN KEY (ilID) REFERENCES IL(ilID),
     FOREIGN KEY (ilceID) REFERENCES ILCE(ilceID),
@@ -62,21 +63,21 @@ CREATE TABLE SEVKIYAT_YONTEMI (
 -- 8. BANKA
 CREATE TABLE BANKA (
     bankaID INT PRIMARY KEY,
-    bankaAdi VARCHAR(100),
-    hesapNo VARCHAR(50)
+    bankaAdi VARCHAR(100) not null,
+    hesapNo VARCHAR(50) unique not null
 );
 
 -- 9. BOLUM
 CREATE TABLE BOLUM (
     bolumID INT PRIMARY KEY,
-    bolumAdi VARCHAR(100)
+    bolumAdi VARCHAR(100) not null
 );
 
 -- 10. GOREV
 CREATE TABLE GOREV (
     gorevID INT PRIMARY KEY,
 	bolumID INT,
-    gorevAdi VARCHAR(100),
+    gorevAdi VARCHAR(100) not null,
 	FOREIGN KEY (bolumID) REFERENCES BOLUM(bolumID)
 );
 
@@ -109,33 +110,34 @@ CREATE TABLE MUSTERI (
     cariHesapUnvani VARCHAR(30) not null,
 	cariHesapTuru VARCHAR(30) not null,
 	vergiNumarasi VARCHAR(20) unique not null,
-	yetkiliAdi VARCHAR(50) not null,
-    yetkiliSoyadi VARCHAR(50) not null,
+	yetkiliKisiAdi VARCHAR(50) not null,
+    yetkiliKisiSoyadi VARCHAR(50) not null,
     telefon char(11) not null,
     web_sitesi varchar(255), check (web_sitesi like 'http%://%'),
     fax VARCHAR(30),
     eposta varchar(100), check (eposta like '%_@_%._%'),
-    aktifRiskToplami DECIMAL(18,2),
-    tanimliRiskLimiti DECIMAL(18,2),
+    aktifRiskToplami DECIMAL(18,2)not null,
+    tanimliRiskLimiti DECIMAL(18,2)not null,
     kullanilabilirRiskLimiti as (tanimliRiskLimiti - aktifRiskToplami),
 	satici_ziyaret_gunu int, check (satici_ziyaret_gunu between 1 and 7),
-    adresID INT,
     vergiDairesiID INT,
     sevkiyatYontemiID INT,
     personelID INT,
     bankaID INT,
-    FOREIGN KEY (adresID) REFERENCES ADRES(adresID),
     FOREIGN KEY (vergiDairesiID) REFERENCES VERGI_DAIRESI(vergiDairesiID),
     FOREIGN KEY (sevkiyatYontemiID) REFERENCES SEVKIYAT_YONTEMI(sevkiyatYontemiID),
     FOREIGN KEY (personelID) REFERENCES PERSONEL(personelID),
     FOREIGN KEY (bankaID) REFERENCES BANKA(bankaID)
 );
 
+ALTER TABLE ADRES 
+ADD musteriID INT FOREIGN KEY REFERENCES MUSTERI(musteriID);
+
 -- [Diðer tablolar ayný þekilde devam eder...]
 -- 13. UST_KATEGORI
 CREATE TABLE UST_KATEGORI (
     ustKategoriID INT PRIMARY KEY,
-    aciklama TEXT
+    aciklama TEXT 
 );
 
 -- 14. ALT_KATEGORI
@@ -150,7 +152,7 @@ CREATE TABLE ALT_KATEGORI (
 CREATE TABLE URUN (
     urunID INT PRIMARY KEY identity(1,1),
     ad VARCHAR(100)not null,
-    kod VARCHAR(50)not null,
+    kod VARCHAR(50) unique not null,
     durum varchar(6) check (durum in ('aktif','pasif')) not null,
     kdvOrani DECIMAL(5,2) not null,
     altKategoriID INT,
@@ -182,33 +184,44 @@ CREATE TABLE BARKOD (
 CREATE TABLE DEPO (
     depoID INT PRIMARY KEY identity(1,1),
     depoAdi VARCHAR(100) not null,
-    depoKodu VARCHAR(50) not null,
-	personelID int,
+    depoKodu VARCHAR(50) unique not null,
+	personelID int unique not null,
+	adresID int,
     depoAciklamasi TEXT,
     kapasite INT not null,
     doluluk INT not null,
-	dolulukOraný as (kapasite / doluluk) * 100,
+	dolulukOraný as (doluluk / kapasite) * 100,
     telefon char(11),
-	foreign key (personelID) references PERSONEL(personelID)
+	foreign key (personelID) references PERSONEL(personelID),
+	foreign key (adresID) references ADRES(adresID)
+);
+
+CREATE TABLE DEPO_URUN (
+	DepoUrunID INT PRIMARY KEY identity(1,1),
+	Miktar INT not null,
+	UrunID INT,
+	DepoID INT,
+	FOREIGN KEY (urunID) REFERENCES URUN(urunID),
+	FOREIGN KEY (depoID) REFERENCES DEPO(depoID)
 );
 
 -- 19. SIPARIS
 CREATE TABLE SIPARIS (
-    siparisID INT PRIMARY KEY,
+    siparisID INT PRIMARY KEY identity(1,1),
     musteriID INT,
     personelID INT,
 	depoID INT,
 	adresID INT,
-    siparisNo VARCHAR(50),
-    siparisTarihi DATE,
-    siparisTuru VARCHAR(50),
-    brütToplam DECIMAL(10,2),
-    indirimToplami DECIMAL(10,2),
-    netToplam DECIMAL(10,2),
-    toplamKDV DECIMAL(10,2),
-    genelToplam DECIMAL(10,2),
-    kalanTutar DECIMAL(10,2),
-    odemeToplami DECIMAL(10,2),
+    siparisNo VARCHAR(50) not null,
+    siparisTarihi DATE not null,
+    siparisTuru VARCHAR(50)  not null,
+    brütToplam DECIMAL(10,2) not null,
+    indirimToplami DECIMAL(10,2) not null,
+    netToplam as (brütToplam - indirimToplami),
+    toplamKDV DECIMAL(10,2)not null,
+    genelToplam as (netToplam + toplamKDV),
+    odemeToplami DECIMAL(10,2) not null,
+    kalanTutar as (genelToplam - odemeToplami),
     aciklama TEXT,
     faturalandirildiMi varchar(6) check (faturalandirildiMi in ('hayýr','evet')) not null,
     FOREIGN KEY (musteriID) REFERENCES MUSTERI(musteriID),
